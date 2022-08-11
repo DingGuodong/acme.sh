@@ -91,6 +91,7 @@ END_CERT="-----END CERTIFICATE-----"
 
 CONTENT_TYPE_JSON="application/jose+json"
 RENEW_SKIP=2
+CODE_DNS_MANUAL=3
 
 B64CONF_START="__ACME_BASE64__START_"
 B64CONF_END="__ACME_BASE64__END_"
@@ -436,21 +437,13 @@ _secure_debug3() {
 }
 
 _upper_case() {
-  if _is_solaris; then
-    tr '[:lower:]' '[:upper:]'
-  else
-    # shellcheck disable=SC2018,SC2019
-    tr 'a-z' 'A-Z'
-  fi
+  # shellcheck disable=SC2018,SC2019
+  tr '[a-z]' '[A-Z]'
 }
 
 _lower_case() {
-  if _is_solaris; then
-    tr '[:upper:]' '[:lower:]'
-  else
-    # shellcheck disable=SC2018,SC2019
-    tr 'A-Z' 'a-z'
-  fi
+  # shellcheck disable=SC2018,SC2019
+  tr '[A-Z]' '[a-z]'
 }
 
 _startswith() {
@@ -1193,7 +1186,7 @@ _createkey() {
 _is_idn() {
   _is_idn_d="$1"
   _debug2 _is_idn_d "$_is_idn_d"
-  _idn_temp=$(printf "%s" "$_is_idn_d" | tr -d '0-9' | tr -d 'a-z' | tr -d 'A-Z' | tr -d '*.,-_')
+  _idn_temp=$(printf "%s" "$_is_idn_d" | tr -d [0-9] | tr -d [a-z] | tr -d [A-Z] | tr -d '*.,-_')
   _debug2 _idn_temp "$_idn_temp"
   [ "$_idn_temp" ]
 }
@@ -4762,7 +4755,9 @@ $_authorizations_map"
       _err "Please add the TXT records to the domains, and re-run with --renew."
       _on_issue_err "$_post_hook"
       _clearup
-      return 1
+      # If asked to be in manual DNS mode, flag this exit with a separate
+      # error so it can be distinguished from other failures.
+      return $CODE_DNS_MANUAL
     fi
 
   fi
@@ -5752,7 +5747,9 @@ _installcert() {
     if [ -f "$_real_cert" ] && [ ! "$_ACME_IS_RENEW" ]; then
       cp "$_real_cert" "$_backup_path/cert.bak"
     fi
-    cat "$CERT_PATH" >"$_real_cert" || return 1
+    if [ "$CERT_PATH" != "$_real_cert" ]; then
+      cat "$CERT_PATH" >"$_real_cert" || return 1
+    fi
   fi
 
   if [ "$_real_ca" ]; then
@@ -5764,7 +5761,9 @@ _installcert() {
       if [ -f "$_real_ca" ] && [ ! "$_ACME_IS_RENEW" ]; then
         cp "$_real_ca" "$_backup_path/ca.bak"
       fi
-      cat "$CA_CERT_PATH" >"$_real_ca" || return 1
+      if [ "$CA_CERT_PATH" != "$_real_ca" ]; then
+        cat "$CA_CERT_PATH" >"$_real_ca" || return 1
+      fi
     fi
   fi
 
@@ -5773,12 +5772,14 @@ _installcert() {
     if [ -f "$_real_key" ] && [ ! "$_ACME_IS_RENEW" ]; then
       cp "$_real_key" "$_backup_path/key.bak"
     fi
-    if [ -f "$_real_key" ]; then
-      cat "$CERT_KEY_PATH" >"$_real_key" || return 1
-    else
-      touch "$_real_key" || return 1
-      chmod 600 "$_real_key"
-      cat "$CERT_KEY_PATH" >"$_real_key" || return 1
+    if [ "$CERT_KEY_PATH" != "$_real_key" ]; then
+      if [ -f "$_real_key" ]; then
+        cat "$CERT_KEY_PATH" >"$_real_key" || return 1
+      else
+        touch "$_real_key" || return 1
+        chmod 600 "$_real_key"
+        cat "$CERT_KEY_PATH" >"$_real_key" || return 1
+      fi
     fi
   fi
 
@@ -5787,7 +5788,9 @@ _installcert() {
     if [ -f "$_real_fullchain" ] && [ ! "$_ACME_IS_RENEW" ]; then
       cp "$_real_fullchain" "$_backup_path/fullchain.bak"
     fi
-    cat "$CERT_FULLCHAIN_PATH" >"$_real_fullchain" || return 1
+    if [ "$_real_fullchain" != "$CERT_FULLCHAIN_PATH" ]; then
+      cat "$CERT_FULLCHAIN_PATH" >"$_real_fullchain" || return 1
+    fi
   fi
 
   if [ "$_reload_cmd" ]; then

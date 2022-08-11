@@ -1,22 +1,22 @@
-name: Solaris
+name: NetBSD
 on:
   push:
     branches:
       - '*'
     paths:
       - '*.sh'
-      - '.github/workflows/Solaris.yml'
+      - '.github/workflows/NetBSD.yml'
 
   pull_request:
     branches:
       - dev
     paths:
       - '*.sh'
-      - '.github/workflows/Solaris.yml'
+      - '.github/workflows/NetBSD.yml'
 
 
 jobs:
-  Solaris:
+  NetBSD:
     strategy:
       matrix:
         include:
@@ -49,14 +49,18 @@ jobs:
       run: echo "TestingDomain=${{steps.tunnel.outputs.server}}" >> $GITHUB_ENV
     - name: Clone acmetest
       run: cd .. && git clone https://github.com/acmesh-official/acmetest.git  && cp -r acme.sh acmetest/
-    - uses: vmactions/solaris-vm@v0
+    - uses: vmactions/netbsd-vm@v0
       with:
         envs: 'TEST_LOCAL TestingDomain TEST_ACME_Server CA_ECDSA CA CA_EMAIL TEST_PREFERRED_CHAIN'
-        copyback: "false"
         nat: |
           "8080": "80"
-        prepare: pkgutil -y -i socat curl
+        prepare: |
+          export PKG_PATH="http://cdn.NetBSD.org/pub/pkgsrc/packages/NetBSD/$(uname -p)/$(uname -r|cut -f '1 2' -d.)/All/"
+          pkg_add curl socat
+        usesh: true
+        copyback: false
         run: |
           cd ../acmetest \
           && ./letest.sh
+
 
